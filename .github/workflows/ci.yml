@@ -556,7 +556,7 @@ jobs:
         BUILD_DIR=build-android-$ABI
         SDL2_PREFIX=$GITHUB_WORKSPACE/sdl2-android
 
-        cmake -B $BUILD_DIR \
+        cmake -G Ninja -B $BUILD_DIR \
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
           -DVCPKG_TARGET_TRIPLET=arm-android \
           -DVCPKG_CMAKE_SYSTEM_VERSION=$ANDROID_API \
@@ -564,7 +564,8 @@ jobs:
           -DANDROID_ABI=$ABI \
           -DANDROID_PLATFORM=android-$ANDROID_API \
           -DSDL2_DIR=$SDL2_PREFIX/lib/cmake/SDL2 \
-          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_MAKE_PROGRAM=/usr/local/bin/ninja
 
         cmake --build $BUILD_DIR -j$(nproc)
 
