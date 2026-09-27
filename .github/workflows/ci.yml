@@ -556,6 +556,10 @@ jobs:
         BUILD_DIR=build-android-$ABI
         SDL2_PREFIX=$GITHUB_WORKSPACE/sdl2-android
 
+        # Передаємо шлях до NDK безпосередньо в середовище vcpkg
+        export ANDROID_NDK_HOME=$ANDROID_NDK
+        export VCPKG_FORCE_SYSTEM_BINARIES=1
+
         cmake -G Ninja -B $BUILD_DIR \
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
           -DVCPKG_TARGET_TRIPLET=arm-android \
@@ -591,6 +595,7 @@ jobs:
 
         echo "Collected .so files:"
         ls -lh $JNILIBS/
+        
 
     - name: Decode release keystore
       env:
