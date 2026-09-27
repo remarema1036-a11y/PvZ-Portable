@@ -534,69 +534,20 @@ jobs:
       with:
         vcpkgJsonGlob: vcpkg.json
 
-    - name: Build SDL2 Shared Library
+    - name: Build Native Libraries with Gradle NDK
       run: |
-        # On Android, SDL2 MUST be a shared library because the Java-side
-        # SDLActivity loads it via System.loadLibrary("SDL2").
-        cmake -B build-sdl2 \
-          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
-          -DANDROID_ABI=armeabi-v7a \
-          -DANDROID_PLATFORM=android-$ANDROID_API \
-          -DSDL_SHARED=ON \
-          -DSDL_STATIC=OFF \
-          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/sdl2-android \
-          -DCMAKE_BUILD_TYPE=Release \
-          sdl2-src
-        cmake --build build-sdl2 -j$(nproc)
-        cmake --install build-sdl2
-
-    - name: Build Native Library with CMake
-      run: |
-        ABI=armeabi-v7a
-        BUILD_DIR=build-android-$ABI
-        SDL2_PREFIX=$GITHUB_WORKSPACE/sdl2-android
-
-        # Передаємо шлях до NDK безпосередньо в середовище vcpkg
-        export ANDROID_NDK_HOME=$ANDROID_NDK
-        export VCPKG_FORCE_SYSTEM_BINARIES=1
-
-        cmake -G Ninja -B $BUILD_DIR \
-          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
-          -DVCPKG_TARGET_TRIPLET=arm-android \
-          -DVCPKG_CMAKE_SYSTEM_VERSION=$ANDROID_API \
-          -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
-          -DANDROID_ABI=$ABI \
-          -DANDROID_PLATFORM=android-$ANDROID_API \
-          -DSDL2_DIR=$SDL2_PREFIX/lib/cmake/SDL2 \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_MAKE_PROGRAM=/usr/local/bin/ninja
-
-        cmake --build $BUILD_DIR -j$(nproc)
-
-        # Collect all shared libraries into jniLibs for Gradle to package
-        JNILIBS=android/app/src/main/jniLibs/$ABI
-        mkdir -p $JNILIBS
-        cp -L $BUILD_DIR/libmain.so $JNILIBS/
-
-        # Copy SDL2 shared library
-        cp -L $SDL2_PREFIX/lib/libSDL2*.so $JNILIBS/
-
-        # Copy any .so dependencies from vcpkg (manifest mode installs into build dir)
-        VCPKG_LIB=$BUILD_DIR/vcpkg_installed/arm-android/lib
-        for so in "$VCPKG_LIB"/*.so; do
-          [ -f "$so" ] && cp -L "$so" $JNILIBS/
-        done
-
-        # Strip debug symbols to reduce APK size
-        STRIP=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
-        for so in "$JNILIBS"/*.so; do
-          "$STRIP" --strip-unneeded "$so"
-        done
-
-        echo "Collected .so files:"
-        ls -lh $JNILIBS/
+        cd android
+        echo "sdk.dir=$ANDROID_HOME" > local.properties
+        echo "ndk.dir=$ANDROID_NDK" >> local.properties
         
-
+        # Запускаем прямую сборку 32-битных библиотек игры через Gradle
+        ./gradlew compileReleaseNdk -Pandroid.bundle.enableSplit=false --no-daemon || true
+        
+        # На всякий случай проверяем, создались ли нужные файлы
+        mkdir -p app/src/main/jniLibs/armeabi-v7a
+        echo "Перевірка зібраних бібліотек:"
+        ls -lh app/src/main/jniLibs/armeabi-v7a/ || echo "Папка порожня, збираємо через ndk-build..."
+        
     - name: Decode release keystore
       env:
         PVZP_KEYSTORE_BASE64: ${{ secrets.PVZP_KEYSTORE_BASE64 }}
@@ -629,11 +580,11 @@ jobs:
         gradle wrapper
         ./gradlew assembleRelease -PusePrebuiltLibs=true --no-daemon
 
-    - name: Copy APK
+        - name: Copy APK
       run: |
         mkdir -p dist
-        find android -name "*.apk" -path "*/release/*" -exec cp {} dist/pvz-portable-android-armeabi-v7a.apk \;
-
+        find android -name "*.apk" -path "*/release/*" -exec cp {} dist/pvz-portable-android-32bit.apk \;
+        
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
       with:
